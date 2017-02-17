@@ -99,14 +99,16 @@ void parseMasterCommands(uint8_t *new_cmd)
 	uint8_t info[2] = {0,0};
 
 	//Valid communication from any port?
+
 	PacketWrapper* p = fm_queue_get(&unpacked_packet_queue);
-	if(p != NULL)
+	while (p != NULL)
 	{
 		info[0] = p->port;
 		payload_parse_str(p);
 
 		//LED:
 		*new_cmd = 1;
+		p = fm_queue_get(&unpacked_packet_queue);
 	}
 
 }
