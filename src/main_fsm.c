@@ -34,6 +34,7 @@
 
 #include "main.h"
 #include "main_fsm.h"
+#include "fm_master_slave_comm.h"
 
 //****************************************************************************
 // Variable(s)
@@ -62,7 +63,7 @@ uint16_t delay = 0;
 //Case 0: I2C1 + slaveComm
 void main_fsm_case_0(void)
 {
-	slaveTransmit(PORT_485_1);
+	slaveTransmit(PORT_RS485_1);
 }
 
 //Case 1: I2C2
@@ -80,7 +81,7 @@ void main_fsm_case_2(void)
 //Case 3:
 void main_fsm_case_3(void)
 {
-	slaveTransmit(PORT_485_2);
+	slaveTransmit(PORT_RS485_2);
 }
 
 //Case 4: User Functions
@@ -120,6 +121,9 @@ void main_fsm_case_6(void)
 {
 	//User switch:
 	manag1.sw1 = read_sw1();
+
+	//ADC:
+	startAdcConversion();
 }
 
 //Case 7:

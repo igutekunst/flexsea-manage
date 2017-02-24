@@ -31,10 +31,12 @@
 //****************************************************************************
 // Include(s)
 //****************************************************************************
-
+#include "flexsea_buffers.h"
 #include "main.h"
 #include "fm_master_slave_comm.h"
-
+#include <fm_block_allocator.h>
+#include <flexsea_payload.h>
+#include <stdbool.h>
 //****************************************************************************
 // Variable(s)
 //****************************************************************************
@@ -44,6 +46,8 @@ uint8_t tmp_rx_command_usb[PAYLOAD_BUF_LEN];
 uint8_t tmp_rx_command_wireless[PAYLOAD_BUF_LEN];
 uint8_t tmp_rx_command_485_1[PAYLOAD_BUF_LEN];
 uint8_t tmp_rx_command_485_2[PAYLOAD_BUF_LEN];
+
+MsgQueue slave_queue;
 
 //****************************************************************************
 // Private Function Prototype(s):
@@ -56,6 +60,7 @@ uint8_t tmp_rx_command_485_2[PAYLOAD_BUF_LEN];
 void initSlaveComm(void)
 {
 	//...
+	fm_queue_init(&slave_queue, 10);
 }
 
 //Prepares the structures:
@@ -91,62 +96,21 @@ void init_master_slave_comm(void)
 //Did we receive new commands? Can we parse them?
 void parseMasterCommands(uint8_t *new_cmd)
 {
-	volatile uint32_t i = 0;
 	uint8_t info[2] = {0,0};
 
-	//Valid communication from SPI?
-	if(cmd_ready_spi != 0)
-	{
-		cmd_ready_spi = 0;
+	//Valid communication from any port?
 
-		//Cheap trick to get first line	//ToDo: support more than 1
-		for(i = 0; i < PAYLOAD_BUF_LEN; i++)
-		{
-			tmp_rx_command_spi[i] = rx_command_spi[0][i];
-		}
-		// parse the command and execute it
-		info[0] = PORT_SPI;
-		payload_parse_str(tmp_rx_command_spi, info);
+	PacketWrapper* p = fm_queue_get(&unpacked_packet_queue);
+	while (p != NULL)
+	{
+		info[0] = p->port;
+		payload_parse_str(p);
 
 		//LED:
 		*new_cmd = 1;
+		p = fm_queue_get(&unpacked_packet_queue);
 	}
 
-	//Valid communication from USB?
-	if(cmd_ready_usb != 0)
-	{
-		cmd_ready_usb = 0;
-
-		//Cheap trick to get first line	//ToDo: support more than 1
-		for(i = 0; i < PAYLOAD_BUF_LEN; i++)
-		{
-			tmp_rx_command_usb[i] = rx_command_usb[0][i];
-		}
-		// parse the command and execute it
-		info[0] = PORT_USB;
-		payload_parse_str(tmp_rx_command_usb, info);
-
-		//LED:
-		*new_cmd = 1;
-	}
-
-	//Valid communication from Wireless?
-	if(masterComm[2].rx.cmdReady > 0)
-	{
-		masterComm[2].rx.cmdReady = 0;
-
-		//Cheap trick to get first line	//ToDo: support more than 1
-		for(i = 0; i < PAYLOAD_BUF_LEN; i++)
-		{
-			tmp_rx_command_wireless[i] = rx_command_wireless[0][i];
-		}
-		// parse the command and execute it
-		info[0] = PORT_WIRELESS;
-		payload_parse_str(tmp_rx_command_wireless, info);
-
-		//LED:
-		*new_cmd = 1;
-	}
 }
 
 //Did we receive new commands? Can we parse them?
@@ -159,82 +123,52 @@ void parseSlaveCommands(uint8_t *new_cmd)
 	if(slaveComm[0].rx.cmdReady > 0)
 	{
 		slaveComm[0].rx.cmdReady = 0;
+		PacketWrapper* p = fm_pool_allocate_block();
+		if (p == NULL)
+			return;
 
+		memcpy(p->unpaked, &rx_command_485_1[0], COMM_STR_BUF_LEN);
+		memcpy(p->packed, rx_buf_1, COMM_STR_BUF_LEN);
+		/*
 		//Cheap trick to get first line	//ToDo: support more than 1
 		for(i = 0; i < PAYLOAD_BUF_LEN; i++)
 		{
 			tmp_rx_command_485_1[i] = rx_command_485_1[0][i];
-		}
-		// parse the command and execute it
-		info[0] = PORT_485_1;
-		payload_parse_str(tmp_rx_command_485_1, info);
+		}*/
+
+		p->port = slaveComm[0].reply_port;
+		payload_parse_str(p);
 	}
 
 	//Valid communication from RS-485 #2?
 	if(slaveComm[1].rx.cmdReady > 0)
 	{
 		slaveComm[1].rx.cmdReady = 0;
+		PacketWrapper* p = fm_pool_allocate_block();
+		if (p == NULL)
+			return;
 
-		//Cheap trick to get first line	//ToDo: support more than 1
-		for(i = 0; i < PAYLOAD_BUF_LEN; i++)
-		{
-			tmp_rx_command_485_2[i] = rx_command_485_2[0][i];
-		}
+		memcpy(p->unpaked, &rx_command_485_2[0], COMM_STR_BUF_LEN);
+		memcpy(p->packed, rx_buf_2, COMM_STR_BUF_LEN);
 		// parse the command and execute it
-		info[0] = PORT_485_2;
-		payload_parse_str(tmp_rx_command_485_2, info);
+		p->port = slaveComm[1].reply_port;
+		payload_parse_str(p);
 	}
 }
 
 //Slave Communication function. Call at 1kHz.
+//ToDo: this ignores the parameter 'port'. It was there to offset the comm between the 2 buses.
 void slaveTransmit(uint8_t port)
 {
-	if(port == PORT_485_1)
+	PacketWrapper* p = fm_queue_get(&slave_queue);
+
+	if (p == NULL)
+		return;
+
+	//Send to slave port:
+	if((p->port == PORT_RS485_1) || (p->port == PORT_RS485_2))
 	{
-		/*Note: this is only a demonstration. In the final application, we want
-		 * to send the commands accumulated on a ring buffer here.*/
-
-		//Packet injection:
-		if(slaveComm[0].tx.inject == 1)
-		{
-			slaveComm[0].tx.inject = 0;
-			if(IS_CMD_RW(slaveComm[0].tx.cmd) == READ)
-			{
-				slaveComm[0].transceiverState = TRANS_STATE_TX_THEN_RX;
-			}
-			else
-			{
-				slaveComm[0].transceiverState = TRANS_STATE_TX;
-			}
-
-			flexsea_send_serial_slave(port, slaveComm[0].tx.txBuf, slaveComm[0].tx.len);
-		}
-
-		//Debugging test: ***ToDo Remove***
-		static uint8_t toggle1 = 0;
-		toggle1 ^= 1;
-		DEBUG_OUT_DIO4(toggle1);
-	}
-	else if(port == PORT_485_2)
-	{
-		/*Note: this is only a demonstration. In the final application, we want
-		 * to send the commands accumulated on a ring buffer here.*/
-
-		//Packet injection:
-		if(slaveComm[1].tx.inject == 1)
-		{
-			slaveComm[1].tx.inject = 0;
-			if(IS_CMD_RW(slaveComm[1].tx.cmd) == READ)
-			{
-				slaveComm[1].transceiverState = TRANS_STATE_TX_THEN_RX;
-			}
-			else
-			{
-				slaveComm[1].transceiverState = TRANS_STATE_TX;
-			}
-
-			flexsea_send_serial_slave(port, slaveComm[1].tx.txBuf, slaveComm[1].tx.len);
-		}
+		flexsea_send_serial_slave(p);
 	}
 }
 

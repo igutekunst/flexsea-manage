@@ -37,8 +37,11 @@
 int usb_bytes_received = 0;
 uint8_t usb_user_rx_buf[100];
 volatile uint8_t data_ready_usb = 0;
+volatile PacketWrapper* fresh_packet = NULL;
 
 /* USER CODE BEGIN INCLUDE */
+#include <fm_block_allocator.h>
+#include <stdbool.h>
 /* USER CODE END INCLUDE */
 
 /** @addtogroup STM32_USB_OTG_DEVICE_LIBRARY
@@ -54,6 +57,7 @@ volatile uint8_t data_ready_usb = 0;
   * @{
   */
 /* USER CODE BEGIN PRIVATE TYPES  */
+volatile bool usb_rx_ready;
 /* USER CODE END PRIVATE TYPES */
 /**
   * @}
@@ -149,8 +153,17 @@ static int8_t CDC_Init_FS(void)
   hUsbDevice_0 = &hUsbDeviceFS;
   /* USER CODE BEGIN 3 */
   /* Set Application Buffers */
+	PacketWrapper* p = fm_pool_allocate_block();
+	p->port = PORT_USB;
+	p->reply_port = PORT_USB;
+
+	if (p == NULL)
+		return USBD_FAIL; // No more blocks available. Consider reporting up the stack
+
+
   USBD_CDC_SetTxBuffer(hUsbDevice_0, UserTxBufferFS, 0);
-  USBD_CDC_SetRxBuffer(hUsbDevice_0, UserRxBufferFS);
+
+  USBD_CDC_SetRxBuffer(hUsbDevice_0, p->packed);
 
   USBD_CDC_ReceivePacket(hUsbDevice_0);
 
@@ -263,14 +276,15 @@ static int8_t CDC_Control_FS  (uint8_t cmd, uint8_t* pbuf, uint16_t length)
 static int8_t CDC_Receive_FS (uint8_t* Buf, uint32_t *Len)
 {
   /* USER CODE BEGIN 6 */
+	if (Buf == NULL || Len == NULL)
+		return USBD_FAIL;
 
-	USBD_CDC_SetRxBuffer(hUsbDevice_0, UserRxBufferFS);
-	USBD_CDC_ReceivePacket(hUsbDevice_0);
+	if (fresh_packet == NULL) {
+		fresh_packet = (PacketWrapper*) Buf;
+	} else {
+		return USBD_FAIL;
+	}
 
-	//Copy incoming bytes to FlexSEA reception buffer
-	usb_bytes_received = (*Len);
-	update_rx_buf_array_usb(UserRxBufferFS, usb_bytes_received);
-	data_ready_usb++;
 
   return (USBD_OK);
   /* USER CODE END 6 */
@@ -291,6 +305,7 @@ uint8_t CDC_Transmit_FSCOMMENTEDOUT(uint8_t* Buf, uint16_t Len)
 {
   uint8_t result = USBD_OK;
   /* USER CODE BEGIN 7 */
+
   USBD_CDC_SetTxBuffer(hUsbDevice_0, Buf, Len);
   result = USBD_CDC_TransmitPacket(hUsbDevice_0);
   /* USER CODE END 7 */
