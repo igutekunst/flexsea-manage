@@ -34,6 +34,7 @@
 //****************************************************************************
 
 #include "main.h"
+#include <fm_uarts.h>
 #include "flexsea_board.h"
 #include "../../flexsea-system/inc/flexsea_system.h"
 #include <fm_block_allocator.h>
@@ -60,6 +61,7 @@ uint8_t board_sub1_id[SLAVE_BUS_1_CNT] = {FLEXSEA_EXECUTE_1, FLEXSEA_EXECUTE_3};
 uint8_t board_sub2_id[SLAVE_BUS_2_CNT] = {FLEXSEA_EXECUTE_2, FLEXSEA_EXECUTE_4};
 
 //(make sure to update SLAVE_BUS_x_CNT in flexsea_board.h!)
+
 
 //===============
 //</FlexSEA User>
@@ -90,6 +92,7 @@ void flexsea_send_serial_slave(PacketWrapper* p)
 	{
 		puts_rs485_1(str, length);
 		slaveComm[0].transceiverState = TRANS_STATE_TX_THEN_RX;	//ToDo we do not always want to RX
+		log_entry(slaveComm[0].transceiverState);
 		slaveComm[0].reply_port = p->reply_port;
 	}
 	else if(port == PORT_RS485_2)
@@ -101,6 +104,7 @@ void flexsea_send_serial_slave(PacketWrapper* p)
 	else
 	{
 		//Unknown port, call flexsea_error()
+
 		flexsea_error(SE_INVALID_SLAVE);
 	}
 	fm_pool_free_block(p);
@@ -179,13 +183,17 @@ void flexsea_start_receiving_from_master(void)
 void flexsea_receive_from_slave(void)
 {
 	//We only listen if we requested a reply:
+	__disable_irq();
 	if(slaveComm[0].transceiverState == TRANS_STATE_PREP_RX)
 	{
 		slaveComm[0].transceiverState = TRANS_STATE_RX;
+		log_entry(slaveComm[0].transceiverState);
+		__enable_irq();
 
 		reception_rs485_1_blocking();	//Sets the transceiver to Receive
 		//From this point on data will be received via the interrupt.
 	}
+	__enable_irq();
 
 	//We only listen if we requested a reply:
 	if(slaveComm[1].transceiverState == TRANS_STATE_PREP_RX)
@@ -202,6 +210,12 @@ void flexsea_receive_from_slave(void)
 		slaveComm[0].rx.bytesReady = 0;
 		//Got new data in, try to decode
 		slaveComm[0].rx.cmdReady = unpack_payload_485_1();
+
+		if(slaveComm[0].rx.cmdReady < 0)
+		{
+			slaveComm[1].transceiverState = TRANS_STATE_RX;
+		}
+
 	}
 
 	//Did we receive new bytes?

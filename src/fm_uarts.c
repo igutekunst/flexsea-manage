@@ -35,8 +35,9 @@
 // Include(s)
 //****************************************************************************
 
-#include "main.h"
+#include <main.h>
 #include "fm_uarts.h"
+#include "fm_timer.h"
 #include <flexsea_comm.h>
 
 //****************************************************************************
@@ -77,6 +78,26 @@ static void init_dma2_stream6_ch5(void);
 static void init_dma1_stream1_ch4(void);
 static void init_dma1_stream3_ch4(void);
 
+#define LOG_ENTRIES 1024
+TIM_HandleTypeDef htim6, htim7;
+
+typedef struct  {
+	uint32_t timestamp;
+	uint8_t state;
+} StateLog;
+StateLog rx_state_log[LOG_ENTRIES];
+size_t rx_state_index;
+
+void log_entry(uint8_t entry) {
+
+	__disable_irq();	// Disable Interrupts
+	rx_state_log[rx_state_index].state = entry;
+	rx_state_log[rx_state_index].timestamp = TIM7->CNT;
+	rx_state_index = (rx_state_index +1) % LOG_ENTRIES;
+	__enable_irq();	// Disable Interrupts
+}
+
+
 //****************************************************************************
 // Public Function(s)
 //****************************************************************************
@@ -116,6 +137,8 @@ void init_usart1(uint32_t baudrate)
 	//The baudrate calculated by the HAL function is wrong by 5% because
 	//I manually change the OVER8 bit. Manually setting it:
 	USART1->BRR = USART1_6_2MBAUD;
+
+
 
 	//Enable DMA:
 	init_dma2_stream2_ch4();	//RX
@@ -307,17 +330,19 @@ void puts_rs485_1(uint8_t *str, uint16_t length)
 	uint8_t *uart1_dma_buf_ptr;
 	uart1_dma_buf_ptr = (uint8_t*) &uart1_dma_tx_buf;
 
-	//Transmit enable
-	rs485_set_mode(PORT_RS485_1, RS485_TX);
-
-	//Copy str to tx buffer:
-	memcpy(uart1_dma_tx_buf, str, length);
 
 	//ToDo replace by valid delay function!
 	for(i = 0; i < 1000; i++);
+	if(husart1.hdmarx->State == HAL_DMA_STATE_READY ) {
+		//Transmit enable
+		rs485_set_mode(PORT_RS485_1, RS485_TX);
 
-	//Send data via DMA:
-	HAL_USART_Transmit_DMA(&husart1, uart1_dma_buf_ptr, length);
+		//Copy str to tx buffer:
+		memcpy(uart1_dma_tx_buf, str, length);
+		//Send data via DMA:
+		HAL_USART_Transmit_DMA(&husart1, uart1_dma_buf_ptr, length);
+	}
+
 }
 
 //Prepares the board for a Reply (reception). Blocking.
@@ -339,9 +364,11 @@ uint8_t reception_rs485_1_blocking(void)
 	rs485_set_mode(PORT_RS485_1, RS485_RX);
 	tmp = USART1->DR;	//Read buffer to clear
 
-	//Start the DMA peripheral
-	HAL_DMA_Start_IT(&hdma2_str2_ch4, (uint32_t) &USART1->DR,
-			(uint32_t) uart1_dma_buf_ptr, rs485_1_dma_xfer_len);
+	if(husart1.hdmarx->State == HAL_DMA_STATE_READY ) {
+		//Start the DMA peripheral
+		HAL_DMA_Start_IT(&hdma2_str2_ch4, (uint32_t) &USART1->DR,(uint32_t) uart1_dma_buf_ptr, rs485_1_dma_xfer_len);
+		//HAL_USART_Receive_DMA(&husart1, uart1_dma_rx_buf,rs485_1_dma_xfer_len );
+	}
 
 	return 0;
 }
@@ -418,14 +445,22 @@ void DMA2_Str2_CompleteTransfer_Callback(DMA_HandleTypeDef *hdma)
 		//Clear the UART receiver. Might not be needed, but harmless
 		//empty_dr = USART1->DR;
 	}
-
-	//Deal with FlexSEA buffers here:
 	update_rx_buf_array_485_1(uart1_dma_rx_buf, rs485_1_dma_xfer_len);
 	//Empty DMA buffer once it's copied:
 	memset(uart1_dma_rx_buf, 0, rs485_1_dma_xfer_len);
 	//slaves_485_1.bytes_ready++;
 	slaveComm[0].rx.bytesReady++;
+
+
+
 }
+
+
+
+void HAL_USART_ErrorCallback(USART_HandleTypeDef *husart) {
+
+}
+
 
 //Code branches here once a TX transfer is complete (either: ISR or DMA)
 void HAL_USART_TxCpltCallback(USART_HandleTypeDef *husart)
@@ -452,8 +487,11 @@ void HAL_USART_TxCpltCallback(USART_HandleTypeDef *husart)
 	if(slaveComm[transceiver].transceiverState == TRANS_STATE_TX_THEN_RX)
 	{
 		slaveComm[transceiver].transceiverState = TRANS_STATE_PREP_RX;
+		log_entry(slaveComm[transceiver].transceiverState);
 	}
 }
+
+
 
 //Function called after a completed DMA transfer, UART6 RX
 void DMA2_Str1_CompleteTransfer_Callback(DMA_HandleTypeDef *hdma)
@@ -593,6 +631,11 @@ static void init_dma2_stream2_ch4(void)
 
 	HAL_DMA_Init(&hdma2_str2_ch4);
 
+	//Link DMA handle and UART RX
+	husart1.hdmarx = &hdma2_str2_ch4;
+	//husart1 is the parent:
+	husart1.hdmarx->Parent = &husart1;
+
 	//Interrupts:
 	HAL_NVIC_SetPriority(DMA2_Stream2_IRQn, DMA_STR2_IRQ_CHANNEL,
 			DMA_STR2_IRQ_SUBCHANNEL);
@@ -601,7 +644,7 @@ static void init_dma2_stream2_ch4(void)
 
 	//Start the DMA peripheral
 	HAL_DMA_Start_IT(&hdma2_str2_ch4, (uint32_t) &USART1->DR,
-			(uint32_t) uart1_dma_buf_ptr, rs485_1_dma_xfer_len);
+			 	 &uart1_dma_rx_buf, rs485_1_dma_xfer_len);
 }
 
 //Using DMA2 Ch 5 Stream 1 for USART6 RX

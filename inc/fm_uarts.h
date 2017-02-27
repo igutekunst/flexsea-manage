@@ -57,6 +57,7 @@ extern DMA_HandleTypeDef hdma1_str3_ch4;	//DMA for USART3 TX
 //General:
 void init_rs485_outputs(void);
 void rs485_set_mode(uint32_t port, uint8_t rx_tx);
+void log_entry(uint8_t entry);
 
 //RS-485 #1:
 void init_usart1(uint32_t baudrate);

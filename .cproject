@@ -149,6 +149,11 @@
 							</tool>
 						</toolChain>
 					</folderInfo>
+					<fileInfo id="ilg.gnuarmeclipse.managedbuild.cross.config.elf.debug.1626890021.371973269" name="stm32f4xx_hal_flash.c" rcbsApplicability="disable" resourcePath="system/Src/stm32f4-hal/stm32f4xx_hal_flash.c" toolsToInvoke="ilg.gnuarmeclipse.managedbuild.cross.tool.c.compiler.1651864683.1910015515">
+						<tool id="ilg.gnuarmeclipse.managedbuild.cross.tool.c.compiler.1651864683.1910015515" name="Cross ARM C Compiler" superClass="ilg.gnuarmeclipse.managedbuild.cross.tool.c.compiler.1651864683">
+							<inputType id="ilg.gnuarmeclipse.managedbuild.cross.tool.c.compiler.input.1281608923" superClass="ilg.gnuarmeclipse.managedbuild.cross.tool.c.compiler.input"/>
+						</tool>
+					</fileInfo>
 					<folderInfo id="ilg.gnuarmeclipse.managedbuild.cross.config.elf.debug.1626890021.416976386" name="/" resourcePath="flexsea-comm">
 						<toolChain id="ilg.gnuarmeclipse.managedbuild.cross.toolchain.elf.debug.1041881001" name="Cross ARM GCC" superClass="ilg.gnuarmeclipse.managedbuild.cross.toolchain.elf.debug" unusedChildren="">
 							<option id="ilg.gnuarmeclipse.managedbuild.cross.option.optimization.level.185432822.2041390842" name="Optimization Level" superClass="ilg.gnuarmeclipse.managedbuild.cross.option.optimization.level.185432822"/>
@@ -210,7 +215,7 @@
 						</toolChain>
 					</folderInfo>
 					<sourceEntries>
-						<entry excluding="flexsea-manage/main.c|test/test_main.c|common|common/src|system/Src/stm32f4-hal/stm32f4xx_hal_spi.c" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
+						<entry excluding="system/Src/stm32f4-hal/stm32f4xx_hal_flash.c|flexsea-manage/main.c|test/test_main.c|common|common/src|system/Src/stm32f4-hal/stm32f4xx_hal_spi.c" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
 					</sourceEntries>
 				</configuration>
 			</storageModule>
@@ -443,9 +448,6 @@
 							</tool>
 						</toolChain>
 					</folderInfo>
-					<fileInfo id="ilg.gnuarmeclipse.managedbuild.cross.config.elf.release.981481402.1023060730" name="test_main.c" rcbsApplicability="disable" resourcePath="test/test_main.c" toolsToInvoke="ilg.gnuarmeclipse.managedbuild.cross.tool.c.compiler.1304284317.499070322">
-						<tool id="ilg.gnuarmeclipse.managedbuild.cross.tool.c.compiler.1304284317.499070322" name="Cross ARM C Compiler" superClass="ilg.gnuarmeclipse.managedbuild.cross.tool.c.compiler.1304284317"/>
-					</fileInfo>
 					<folderInfo id="ilg.gnuarmeclipse.managedbuild.cross.config.elf.release.981481402.1808330410" name="/" resourcePath="flexsea-comm">
 						<toolChain id="ilg.gnuarmeclipse.managedbuild.cross.toolchain.elf.release.256607805" name="Cross ARM GCC" superClass="ilg.gnuarmeclipse.managedbuild.cross.toolchain.elf.release" unusedChildren="">
 							<option id="ilg.gnuarmeclipse.managedbuild.cross.option.optimization.level.1652492059.286174054" name="Optimization Level" superClass="ilg.gnuarmeclipse.managedbuild.cross.option.optimization.level.1652492059"/>
